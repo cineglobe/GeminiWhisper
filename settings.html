@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GeminiWhisper Settings</title>
+  <style>
+    body { font-family: sans-serif; margin: 30px; background: #f7f7fa; }
+    h2 { margin-top: 0; }
+    label { display: block; margin-top: 20px; }
+    input[type="text"], select { width: 100%; padding: 8px; margin-top: 8px; border-radius: 4px; border: 1px solid #ccc; }
+    button { margin-top: 24px; padding: 10px 24px; background: #0078d7; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #005fa3; }
+    .notice { margin-top: 30px; color: #555; font-size: 0.95em; background: #e9f5ff; padding: 10px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h2>GeminiWhisper Settings</h2>
+  <form id="settings-form">
+    <label for="apiKey">Google Gemini API Key:</label>
+    <input type="text" id="apiKey" name="apiKey" required autocomplete="off" />
+
+    <label for="mode">Mode:</label>
+    <select id="mode" name="mode">
+      <option value="normal">Normal</option>
+      <option value="email">Email</option>
+    </select>
+
+    <label for="model">Model:</label>
+    <select id="model" name="model">
+      <option value="gemini-2.5-flash-preview-05-20">gemini-2.5-flash-preview-05-20 (RECOMMENDED)</option>
+      <option value="gemini-2.5-pro-preview-05-06">gemini-2.5-pro-preview-05-06</option>
+      <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+      <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+    </select>
+    <small style="color:#888;">gemini-2.5-flash-preview-05-20 is recommended for best results.</small>
+
+    <button type="submit">Save Settings</button>
+  </form>
+  <div class="notice">
+    <strong>Privacy Notice:</strong> Your API key is stored securely on your device and is only used to send audio to Google Gemini for transcription. No data is sent anywhere else.
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>
