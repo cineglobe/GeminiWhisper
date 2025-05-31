@@ -1,4 +1,5 @@
 const { app, globalShortcut, Tray, Menu, BrowserWindow, Notification, clipboard } = require('electron');
+const { pasteClipboard } = require('./auto_paste');
 const Store = require('electron-store');
 const Mic = require('mic');
 const axios = require('axios');
@@ -6,6 +7,13 @@ const axios = require('axios');
 
 const path = require('path');
 const fs = require('fs');
+
+// Set SoX path globally for both development and production
+const isPackaged = process.defaultApp ? false : process.mainModule && process.mainModule.filename.indexOf('app.asar') !== -1;
+const basePath = isPackaged ? process.resourcesPath : __dirname;
+const soxDir = path.join(basePath, 'bin', 'sox');
+process.env.PATH = soxDir + ';' + process.env.PATH;
+const soxPath = path.join(soxDir, 'sox.exe');
 
 const store = new Store({
   encryptionKey: 'replace-this-with-a-secure-key', // TODO: Generate/store securely
@@ -61,6 +69,7 @@ function openSettingsWindow() {
     height: 600,
     resizable: false,
     title: 'GeminiWhisper Settings',
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -86,6 +95,7 @@ function createOverlay() {
     movable: false,
     focusable: false,
     transparent: true,
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -146,7 +156,7 @@ async function processAudio() {
     }
     // Dynamic gain normalization using SoX
     const { execSync } = require('child_process');
-    const soxPath = path.join(__dirname, 'bin', 'sox', 'sox.exe');
+    console.log('Using soxPath:', soxPath, 'Exists:', fs.existsSync(soxPath));
     const normalizedPath = path.join(app.getPath('userData'), 'last_recording_normalized.wav');
 
     // RMS normalization for average speech loudness (no clipping)
@@ -181,6 +191,7 @@ async function processAudio() {
         }
       } else {
         clipboard.writeText(text);
+        pasteClipboard(); // Simulate Ctrl+V to auto-paste transcript
         if (overlayWindow) {
           overlayWindow.webContents.send('overlay-status', 'Copied!');
           setTimeout(() => {

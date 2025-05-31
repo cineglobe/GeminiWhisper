@@ -6,7 +6,8 @@
   "author": "",
   "license": "MIT",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "axios": "^1.6.7",
@@ -16,6 +17,25 @@
   },
   "devDependencies": {
     "electron": "^28.2.3",
+    "electron-builder": "^24.6.0",
     "electron-rebuild": "^3.2.9"
+  },
+  "build": {
+    "appId": "com.geminiwhisper.app",
+    "productName": "GeminiWhisper",
+    "win": {
+      "icon": "icon.ico",
+      "target": "nsis"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/sox/",
+        "to": "bin/sox"
+      }
+    ]
   }
 }
