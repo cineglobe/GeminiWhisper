@@ -32,7 +32,7 @@ const store = new Store({
     modeSwitchHotkey: { type: 'string', default: 'Alt+Shift+M' },
     autoStart: { type: 'boolean', default: true },
     autoMinimizeToTray: { type: 'boolean', default: true },
-    showNotifications: { type: 'boolean', default: true },
+    showNotifications: { type: 'boolean', default: false },
     autoPaste: { type: 'boolean', default: true },
     selectedModel: { type: 'string', default: 'gemini-2.5-flash' },
     audioQuality: { type: 'string', default: 'high' },
@@ -177,10 +177,10 @@ function showModeSwitch(modeId) {
   
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   modeOverlayWindow = new BrowserWindow({
-    width: 300,
-    height: 100,
-    x: Math.round(width / 2 - 150),
-    y: Math.round(height / 2 - 50),
+    width: 320,
+    height: 120,
+    x: Math.round(width / 2 - 160),
+    y: Math.round(height / 2 - 60),
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -199,19 +199,22 @@ function showModeSwitch(modeId) {
   modeOverlayWindow.loadFile(path.join(__dirname, 'dist', 'mode-overlay.html'));
   
   modeOverlayWindow.webContents.once('did-finish-load', () => {
-    modeOverlayWindow.webContents.send('show-mode', {
-      name: modeData?.name || 'Unknown',
-      icon: modeData?.icon || '🎤',
-      color: modeData?.color || '#3b82f6'
-    });
-    modeOverlayWindow.show();
-    
-    setTimeout(() => {
-      if (modeOverlayWindow) {
-        modeOverlayWindow.close();
-        modeOverlayWindow = null;
-      }
-    }, 2000);
+    // Check if window still exists before trying to access it
+    if (modeOverlayWindow && !modeOverlayWindow.isDestroyed()) {
+      modeOverlayWindow.webContents.send('show-mode', {
+        name: modeData?.name || 'Unknown',
+        icon: modeData?.icon || '🎤',
+        color: modeData?.color || '#3b82f6'
+      });
+      modeOverlayWindow.show();
+      
+      setTimeout(() => {
+        if (modeOverlayWindow && !modeOverlayWindow.isDestroyed()) {
+          modeOverlayWindow.close();
+          modeOverlayWindow = null;
+        }
+      }, 2000);
+    }
   });
   
   modeOverlayWindow.on('closed', () => {
@@ -252,8 +255,8 @@ function createOverlay() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   const overlayPos = store.get('overlayPosition');
   
-  const overlayWidth = 300;
-  const overlayHeight = 150;
+  const overlayWidth = 320;
+  const overlayHeight = 180;
   
   let x, y;
   switch (overlayPos) {
@@ -323,11 +326,13 @@ function startRecording() {
   micInstance.start();
   
   createOverlay();
-  overlayWindow.show();
-  overlayWindow.webContents.send('overlay-status', {
-    status: 'listening',
-    message: 'Listening...'
-  });
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.show();
+    overlayWindow.webContents.send('overlay-status', {
+      status: 'listening',
+      message: 'Listening...'
+    });
+  }
   
   console.log('Recording started...');
 }
@@ -344,7 +349,7 @@ function stopRecordingAndTranscribe() {
     audioWriteStream.end();
   }
   
-  if (overlayWindow) {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('overlay-status', {
       status: 'processing',
       message: 'Transcribing...'
@@ -393,7 +398,7 @@ async function processAudio() {
       const waitTime = MIN_API_INTERVAL - timeSinceLastCall;
       console.log(`Rate limiting: waiting ${waitTime}ms before API call`);
       
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send('overlay-status', {
           status: 'processing',
           message: `Rate limit wait: ${Math.ceil(waitTime/1000)}s`
@@ -531,7 +536,7 @@ async function processAudio() {
             console.log(`503 Service Unavailable. Retrying in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
             
             // Show progress to user
-            if (overlayWindow) {
+            if (overlayWindow && !overlayWindow.isDestroyed()) {
               overlayWindow.webContents.send('overlay-status', {
                 status: 'processing',
                 message: `API unavailable, retrying... (${retryCount}/${maxRetries})`
@@ -621,14 +626,16 @@ async function processAudio() {
           pasteClipboard();
         }
         
-        if (overlayWindow) {
+        if (overlayWindow && !overlayWindow.isDestroyed()) {
           overlayWindow.webContents.send('overlay-status', {
             status: 'success',
             message: store.get('autoPaste') ? 'Pasted!' : 'Copied!'
           });
           
           setTimeout(() => {
-            overlayWindow.hide();
+            if (overlayWindow && !overlayWindow.isDestroyed()) {
+              overlayWindow.hide();
+            }
           }, 1200);
         }
         
@@ -654,19 +661,21 @@ async function processAudio() {
       showError(errorMessage);
       
       // Show more detailed help message
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         setTimeout(() => {
-          overlayWindow.webContents.send('overlay-status', {
-            status: 'error',
-            message: 'API quota reached - wait and try again'
-          });
+          if (overlayWindow && !overlayWindow.isDestroyed()) {
+            overlayWindow.webContents.send('overlay-status', {
+              status: 'error',
+              message: 'API quota reached - wait and try again'
+            });
+          }
         }, 3000);
       }
     } else if (err.response?.status === 503) {
       const errorMessage = `Google Gemini API is temporarily unavailable (503 Service Unavailable). This usually resolves within a few minutes. Please try again later.`;
       showError(errorMessage);
       
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send('overlay-status', {
           status: 'error',
           message: 'API temporarily unavailable'
@@ -676,7 +685,7 @@ async function processAudio() {
       // Handle our custom 503 error message from retry logic
       showError(err.message);
       
-      if (overlayWindow) {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayWindow.webContents.send('overlay-status', {
           status: 'error',
           message: 'API unavailable after retries'
@@ -754,14 +763,16 @@ function cleanupTempFiles() {
 
 // Enhanced error handling
 function showError(message) {
-  if (overlayWindow) {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('overlay-status', {
       status: 'error',
       message: message
     });
     
     setTimeout(() => {
-      overlayWindow.hide();
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.hide();
+      }
     }, 3000);
   }
   
