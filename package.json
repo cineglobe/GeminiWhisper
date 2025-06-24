@@ -1,19 +1,23 @@
 {
   "name": "gemini-whisper",
-  "version": "1.0.0",
-  "description": "Background Electron app: mic hotkey, Gemini transcription, auto-paste.",
+  "version": "2.0.0",
+  "description": "Modern AI-powered voice transcription app with custom modes and beautiful UI",
   "main": "main.js",
   "author": "",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dev": "electron . --dev",
+    "dist": "electron-builder",
+    "postinstall": "electron-rebuild"
   },
   "dependencies": {
+    "auto-launch": "^5.0.6",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5",
     "electron-store": "^8.1.0",
-    "mic": "^2.1.1"
+    "mic": "^2.1.1",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "electron": "^28.2.3",
@@ -25,17 +29,29 @@
     "productName": "GeminiWhisper",
     "win": {
       "icon": "icon.ico",
-      "target": "nsis"
+      "target": "nsis",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createStartMenuShortcut": true,
+      "createDesktopShortcut": true
     },
     "files": [
       "**/*",
-      "!node_modules/.cache"
+      "!node_modules/.cache",
+      "!src/**/*",
+      "dist/**/*"
     ],
     "extraResources": [
       {
         "from": "bin/sox/",
         "to": "bin/sox"
       }
-    ]
+    ],
+    "directories": {
+      "output": "release"
+    }
   }
 }
