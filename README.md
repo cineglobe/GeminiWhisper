@@ -4,7 +4,11 @@ Modern AI-powered voice transcription for Windows, built with Electron, SoX, and
 
 ![Version](https://img.shields.io/badge/Version-2.1.0-blue.svg) ![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg) ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
-GeminiWhisper records speech with a global hotkey, sends the audio to Gemini for transcription, and copies or pastes the result into the active app. It is designed for people who want a lightweight, local-first alternative to paid dictation tools while keeping their API key and recordings on their own machine.
+GeminiWhisper records speech with a global hotkey, sends the audio to Gemini for transcription, and copies or pastes the result into the active app. It is designed for people who want a lightweight, very secure, local-first alternative to paid dictation tools while keeping their API key and recordings on their own machine.
+
+## Used by
+
+GeminiWhisper is used by the University of Kent and EKC Group Canterbury College.
 
 ## Features
 
@@ -82,13 +86,16 @@ Transcribes speech and formats it as a professional email.
 
 The app also has internal support for custom prompt modes. The next maintenance target is exposing full custom-mode editing in the refreshed settings UI.
 
-## Privacy
+## Security and Privacy
+
+GeminiWhisper is built to be very secure and local-first by default.
 
 - API keys are stored locally using `electron-store` encryption.
 - Audio is sent only to the configured Google Gemini API endpoint for transcription.
 - GeminiWhisper does not include telemetry.
 - Recordings and transcripts are saved locally under the app user-data directory.
 - Temporary audio processing files are cleaned up after transcription.
+- See [SECURITY.md](SECURITY.md) for the security policy and vulnerability reporting process.
 
 ## Project Structure
 
