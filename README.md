@@ -10,6 +10,9 @@ GeminiWhisper records speech with a global hotkey, sends the audio to Gemini for
 
 GeminiWhisper is used by the University of Kent and EKC Group Canterbury College.
 
+<img width="965" height="788" alt="image" src="https://github.com/user-attachments/assets/3f8715b2-7003-4585-8e12-f694c249220c" />
+
+
 ## Features
 
 - Global recording hotkey: press `Alt+Space` to start and stop recording
