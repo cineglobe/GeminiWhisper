@@ -4,10 +4,69 @@ const Store = require('electron-store');
 const Mic = require('mic');
 const axios = require('axios');
 const AutoLaunch = require('auto-launch');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+
+const APP_REPO_URL = 'https://github.com/cineglobe/GeminiWhisper';
+const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash';
+const FALLBACK_GEMINI_MODEL = 'gemini-2.5-flash';
+const LEGACY_MODEL_ALIASES = {
+  'gemini-2.5-flash-preview-05-20': DEFAULT_GEMINI_MODEL,
+  'gemini-2.5-pro-preview-05-06': 'gemini-2.5-pro',
+  'gemini-2.0-flash': DEFAULT_GEMINI_MODEL,
+  'gemini-2.0-flash-lite': 'gemini-2.5-flash-lite'
+};
+const STATIC_GEMINI_MODELS = [
+  {
+    name: DEFAULT_GEMINI_MODEL,
+    displayName: 'Gemini 3.5 Flash',
+    description: 'Stable frontier model for fast, high-quality transcription and formatting.',
+    isLatest: true,
+    badgeType: 'Recommended'
+  },
+  {
+    name: 'gemini-flash-latest',
+    displayName: 'Gemini Flash Latest',
+    description: 'Alias that follows the latest Flash-family release.',
+    badgeType: 'Latest alias'
+  },
+  {
+    name: 'gemini-3.1-pro-preview',
+    displayName: 'Gemini 3.1 Pro Preview',
+    description: 'Preview Pro model for more complex reasoning and formatting tasks.',
+    badgeType: 'Pro'
+  },
+  {
+    name: FALLBACK_GEMINI_MODEL,
+    displayName: 'Gemini 2.5 Flash',
+    description: 'Reliable low-latency fallback model for high-volume transcription.',
+    badgeType: 'Fallback'
+  },
+  {
+    name: 'gemini-2.5-pro',
+    displayName: 'Gemini 2.5 Pro',
+    description: 'Advanced 2.5 family model for complex tasks.',
+    badgeType: 'Pro'
+  },
+  {
+    name: 'gemini-2.5-flash-lite',
+    displayName: 'Gemini 2.5 Flash-Lite',
+    description: 'Fast, cost-efficient model for lightweight transcription workflows.',
+    badgeType: 'Fast'
+  }
+];
+
+function resolveUiFile(fileName) {
+  const distPath = path.join(__dirname, 'dist', fileName);
+  return fs.existsSync(distPath) ? distPath : path.join(__dirname, fileName);
+}
+
+function normalizeModelName(modelName) {
+  if (!modelName) return DEFAULT_GEMINI_MODEL;
+  return LEGACY_MODEL_ALIASES[modelName] || modelName;
+}
 
 // Configure auto-launch
 const autoLauncher = new AutoLaunch({
@@ -34,7 +93,7 @@ const store = new Store({
     autoMinimizeToTray: { type: 'boolean', default: true },
     showNotifications: { type: 'boolean', default: false },
     autoPaste: { type: 'boolean', default: true },
-    selectedModel: { type: 'string', default: 'gemini-2.5-flash' },
+    selectedModel: { type: 'string', default: DEFAULT_GEMINI_MODEL },
     audioQuality: { type: 'string', default: 'high' },
     overlayPosition: { type: 'string', default: 'center' },
     darkMode: { type: 'boolean', default: true },
@@ -127,7 +186,7 @@ function createTray() {
     {
       label: 'About',
       click: () => {
-        shell.openExternal('https://github.com/yourusername/geminiwhisper');
+        shell.openExternal(APP_REPO_URL);
       }
     },
     {
@@ -196,7 +255,7 @@ function showModeSwitch(modeId) {
     }
   });
   
-  modeOverlayWindow.loadFile(path.join(__dirname, 'dist', 'mode-overlay.html'));
+  modeOverlayWindow.loadFile(resolveUiFile('mode-overlay.html'));
   
   modeOverlayWindow.webContents.once('did-finish-load', () => {
     // Check if window still exists before trying to access it
@@ -244,7 +303,7 @@ function openSettingsWindow() {
     }
   });
   
-  settingsWindow.loadFile(path.join(__dirname, 'dist', 'settings.html'));
+  settingsWindow.loadFile(resolveUiFile('settings.html'));
   settingsWindow.on('closed', () => { settingsWindow = null; });
 }
 
@@ -297,7 +356,7 @@ function createOverlay() {
     }
   });
   
-  overlayWindow.loadFile(path.join(__dirname, 'dist', 'overlay.html'));
+  overlayWindow.loadFile(resolveUiFile('overlay.html'));
   overlayWindow.on('closed', () => { overlayWindow = null; });
 }
 
@@ -377,11 +436,9 @@ async function processAudio() {
   try {
     const apiKey = store.get('apiKey');
     const currentMode = store.get('currentMode');
-    let selectedModel = store.get('selectedModel');
+    let selectedModel = normalizeModelName(store.get('selectedModel'));
     
-    // Default to 2.5 Flash model if nothing is selected
-    if (!selectedModel) {
-      selectedModel = 'gemini-2.5-flash';
+    if (selectedModel !== store.get('selectedModel')) {
       store.set('selectedModel', selectedModel);
     }
     
@@ -431,9 +488,9 @@ async function processAudio() {
     }
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    // Initially save as WAV, we'll convert to MP3 after transcription
+    // Save as WAV so the extension matches the actual audio container.
     const tempWavPath = path.join(recordingsDir, `recording_${timestamp}_temp.wav`);
-    savedRecordingPath = path.join(recordingsDir, `recording_${timestamp}.mp3`);
+    savedRecordingPath = path.join(recordingsDir, `recording_${timestamp}.wav`);
     
     try {
       fs.copyFileSync(audioFilePath, tempWavPath);
@@ -571,17 +628,16 @@ async function processAudio() {
       // Store transcript for the recording
       transcriptForStorage = text;
       
-      // Save transcript and convert audio to MP3 after successful transcription
+      // Save transcript and archive the source recording after successful transcription.
       if (savedRecordingPath && text && text.trim() !== '%NOSPEECHFOUND%') {
         try {
           // Save transcript
-          const transcriptPath = savedRecordingPath.replace('.mp3', '.txt');
+          const transcriptPath = savedRecordingPath.replace('.wav', '.txt');
           fs.writeFileSync(transcriptPath, text, 'utf8');
           console.log('Transcript saved immediately to:', transcriptPath);
           console.log('Transcript content:', text.substring(0, 100) + '...');
           
-                      // Convert WAV to MP3 for storage (simple rename fallback)
-            await convertWavToMp3ForStorage(savedRecordingPath, text);
+          await archiveWavRecording(savedRecordingPath);
           
           // Verify transcript was saved
           if (fs.existsSync(transcriptPath)) {
@@ -599,15 +655,14 @@ async function processAudio() {
       
       if (text.trim() === '%NOSPEECHFOUND%') {
         showError('No speech detected');
-        // Still save the "no speech" result and convert to MP3
+        // Still save the "no speech" result and archive the recording.
         if (savedRecordingPath) {
           try {
-            const transcriptPath = savedRecordingPath.replace('.mp3', '.txt');
+            const transcriptPath = savedRecordingPath.replace('.wav', '.txt');
             fs.writeFileSync(transcriptPath, 'No speech detected', 'utf8');
             console.log('No speech result saved to:', transcriptPath);
             
-                          // Convert WAV to MP3 for storage (even for no speech)
-              await convertWavToMp3ForStorage(savedRecordingPath, 'No speech detected');
+            await archiveWavRecording(savedRecordingPath);
             
             // Verify transcript was saved
             if (fs.existsSync(transcriptPath)) {
@@ -709,32 +764,29 @@ async function processAudio() {
   }
 }
 
-// Function to convert WAV to MP3 for storage (simple rename)
-async function convertWavToMp3ForStorage(mp3Path, transcript) {
-  const timestamp = path.basename(mp3Path, '.mp3').replace('recording_', '');
-  const tempWavPath = path.join(path.dirname(mp3Path), `recording_${timestamp}_temp.wav`);
+async function archiveWavRecording(wavPath) {
+  const timestamp = path.basename(wavPath, '.wav').replace('recording_', '');
+  const tempWavPath = path.join(path.dirname(wavPath), `recording_${timestamp}_temp.wav`);
   
   if (!fs.existsSync(tempWavPath)) {
-    console.error('Temporary WAV file not found for MP3 conversion:', tempWavPath);
+    console.error('Temporary WAV file not found for archiving:', tempWavPath);
     return;
   }
   
   try {
-    console.log('Converting WAV to MP3 for storage (rename)...');
+    console.log('Archiving WAV recording...');
     
-    // Simple rename - WAV files can be played by most systems even with .mp3 extension
-    fs.renameSync(tempWavPath, mp3Path);
+    fs.renameSync(tempWavPath, wavPath);
     
-    // Verify MP3 was created
-    if (fs.existsSync(mp3Path)) {
-      const stats = fs.statSync(mp3Path);
-      console.log(`MP3 created: ${stats.size} bytes at ${mp3Path}`);
+    if (fs.existsSync(wavPath)) {
+      const stats = fs.statSync(wavPath);
+      console.log(`WAV archive created: ${stats.size} bytes at ${wavPath}`);
     } else {
-      console.error('MP3 file was not created:', mp3Path);
+      console.error('WAV archive was not created:', wavPath);
     }
     
   } catch (error) {
-    console.error('Error converting to MP3:', error);
+    console.error('Error archiving WAV recording:', error);
   }
 }
 
@@ -874,6 +926,11 @@ app.on('activate', () => {
 
 // Enhanced IPC handlers
 ipcMain.handle('get-settings', () => {
+  const selectedModel = normalizeModelName(store.get('selectedModel'));
+  if (selectedModel !== store.get('selectedModel')) {
+    store.set('selectedModel', selectedModel);
+  }
+
   return {
     apiKey: store.get('apiKey'),
     currentMode: store.get('currentMode'),
@@ -883,7 +940,7 @@ ipcMain.handle('get-settings', () => {
     autoMinimizeToTray: store.get('autoMinimizeToTray'),
     showNotifications: store.get('showNotifications'),
     autoPaste: store.get('autoPaste'),
-    selectedModel: store.get('selectedModel'),
+    selectedModel,
     audioQuality: store.get('audioQuality'),
     overlayPosition: store.get('overlayPosition'),
     darkMode: store.get('darkMode'),
@@ -894,21 +951,36 @@ ipcMain.handle('get-settings', () => {
 
 ipcMain.handle('set-settings', async (event, settings) => {
   const oldAutoStart = store.get('autoStart');
+  const normalizedSettings = { ...settings };
+
+  if (normalizedSettings.mode !== undefined && normalizedSettings.currentMode === undefined) {
+    normalizedSettings.currentMode = normalizedSettings.mode;
+    delete normalizedSettings.mode;
+  }
+
+  if (normalizedSettings.model !== undefined && normalizedSettings.selectedModel === undefined) {
+    normalizedSettings.selectedModel = normalizedSettings.model;
+    delete normalizedSettings.model;
+  }
+
+  if (normalizedSettings.selectedModel !== undefined) {
+    normalizedSettings.selectedModel = normalizeModelName(normalizedSettings.selectedModel);
+  }
   
   // Update all settings
-  Object.keys(settings).forEach(key => {
-    if (settings[key] !== undefined) {
-      store.set(key, settings[key]);
+  Object.keys(normalizedSettings).forEach(key => {
+    if (normalizedSettings[key] !== undefined) {
+      store.set(key, normalizedSettings[key]);
     }
   });
   
   // Handle auto-startup change
-  if (settings.autoStart !== undefined && settings.autoStart !== oldAutoStart) {
+  if (normalizedSettings.autoStart !== undefined && normalizedSettings.autoStart !== oldAutoStart) {
     await initializeAutoStartup();
   }
   
   // Re-register hotkeys if they changed
-  if (settings.recordingHotkey || settings.modeSwitchHotkey) {
+  if (normalizedSettings.recordingHotkey || normalizedSettings.modeSwitchHotkey) {
     registerHotkeys();
   }
   
@@ -921,7 +993,7 @@ ipcMain.handle('set-settings', async (event, settings) => {
 ipcMain.handle('create-custom-mode', (event, mode) => {
   const customModes = store.get('customModes') || [];
   const newMode = {
-    id: uuidv4(),
+    id: randomUUID(),
     name: mode.name,
     prompt: mode.prompt,
     icon: mode.icon || '🎤',
@@ -972,7 +1044,7 @@ ipcMain.handle('reset-hotkeys', () => {
 
 ipcMain.handle('test-api-key', async (event, apiKey) => {
   try {
-    const response = await axios.post('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_GEMINI_MODEL}:generateContent`, {
       contents: [{
         role: 'user',
         parts: [{ text: 'Hello, please respond with "API key is working"' }]
@@ -1005,6 +1077,14 @@ const MIN_MODELS_FETCH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 ipcMain.handle('fetch-gemini-models', async (event, apiKey) => {
   try {
+    if (!apiKey) {
+      return {
+        success: true,
+        models: STATIC_GEMINI_MODELS,
+        source: 'bundled'
+      };
+    }
+
     // Check rate limiting
     const timeSinceLastFetch = Date.now() - lastModelsFetch;
     if (cachedModelsData && timeSinceLastFetch < MIN_MODELS_FETCH_INTERVAL) {
@@ -1033,8 +1113,8 @@ ipcMain.handle('fetch-gemini-models', async (event, apiKey) => {
           modelName.includes('gemini') && 
           model.supportedGenerationMethods && 
           model.supportedGenerationMethods.includes('generateContent') &&
-          // Only include 2.5+ versions
-          (modelName.includes('2.5') || modelName.includes('2.6') || modelName.includes('3.') || modelName.includes('4.')) &&
+          // Only include current multimodal generations.
+          (modelName.includes('2.5') || modelName.includes('3.') || modelName.includes('latest')) &&
           // Exclude TTS models
           !modelName.includes('tts') &&
           !modelName.includes('text-to-speech') &&
@@ -1134,8 +1214,17 @@ ipcMain.handle('fetch-gemini-models', async (event, apiKey) => {
     // Clean up temporary field
     const finalModels = sortedModels.map(({ originalName, ...model }) => model);
     
+    const mergedModels = [...STATIC_GEMINI_MODELS];
+    const existingNames = new Set(mergedModels.map(model => model.name));
+    finalModels.forEach(model => {
+      if (!existingNames.has(model.name)) {
+        existingNames.add(model.name);
+        mergedModels.push(model);
+      }
+    });
+
     // Cache the successful result
-    const result = { success: true, models: finalModels };
+    const result = { success: true, models: mergedModels, source: 'api' };
     cachedModelsData = result;
     lastModelsFetch = Date.now();
     
@@ -1143,8 +1232,10 @@ ipcMain.handle('fetch-gemini-models', async (event, apiKey) => {
   } catch (err) {
     console.error('Error fetching models from API:', err.response?.data?.error?.message || err.message);
     return { 
-      success: false, 
-      error: err.response?.data?.error?.message || err.message 
+      success: true,
+      models: STATIC_GEMINI_MODELS,
+      source: 'bundled',
+      warning: err.response?.data?.error?.message || err.message
     };
   }
 });
@@ -1169,12 +1260,12 @@ ipcMain.handle('get-recordings', async () => {
     console.log('All files in recordings directory:', allFiles);
     
     const files = allFiles
-      .filter(file => file.endsWith('.mp3'))
+      .filter(file => file.endsWith('.wav') || file.endsWith('.mp3'))
       .map(file => {
         const filePath = path.join(recordingsDir, file);
-        const transcriptPath = filePath.replace('.mp3', '.txt');
+        const transcriptPath = filePath.replace(/\.(wav|mp3)$/i, '.txt');
         const stats = fs.statSync(filePath);
-        const match = file.match(/recording_(.+)\.mp3$/);
+        const match = file.match(/recording_(.+)\.(wav|mp3)$/i);
         const timestamp = match ? match[1].replace(/-/g, ':').replace(/T/, ' ') : 'Unknown';
         
         // Check if transcript exists
@@ -1216,7 +1307,7 @@ ipcMain.handle('delete-recording', async (event, recordingId) => {
   try {
     const recordingsDir = path.join(app.getPath('userData'), 'recordings');
     const filePath = path.join(recordingsDir, recordingId);
-    const transcriptPath = filePath.replace('.mp3', '.txt');
+    const transcriptPath = filePath.replace(/\.(wav|mp3)$/i, '.txt');
     
     let deleted = false;
     
@@ -1269,7 +1360,7 @@ ipcMain.handle('clear-all-recordings', async () => {
     if (fs.existsSync(recordingsDir)) {
       const files = fs.readdirSync(recordingsDir);
       for (const file of files) {
-        if (file.endsWith('.mp3') || file.endsWith('.txt') || file.includes('_temp.wav')) {
+        if (file.endsWith('.wav') || file.endsWith('.mp3') || file.endsWith('.txt') || file.includes('_temp.wav')) {
           fs.unlinkSync(path.join(recordingsDir, file));
         }
       }
@@ -1299,7 +1390,7 @@ ipcMain.handle('get-recording-file', async (event, recordingId) => {
     return { 
       success: true, 
       data: base64Data,
-      mimeType: 'audio/mp3'
+      mimeType: recordingId.toLowerCase().endsWith('.mp3') ? 'audio/mpeg' : 'audio/wav'
     };
   } catch (error) {
     console.error('Error getting recording file:', error);

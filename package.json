@@ -1,28 +1,27 @@
 {
   "name": "gemini-whisper",
-  "version": "2.0.0",
-  "description": "Modern AI-powered voice transcription app with custom modes and beautiful UI",
+  "version": "2.1.0",
+  "description": "Modern AI-powered voice transcription app with Gemini 3.5 model support",
   "main": "main.js",
   "author": "",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "dist": "electron-builder",
-    "postinstall": "electron-rebuild"
+    "dist": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac",
+    "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
     "auto-launch": "^5.0.6",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5",
     "electron-store": "^8.1.0",
-    "mic": "^2.1.1",
-    "uuid": "^9.0.1"
+    "mic": "^2.1.1"
   },
   "devDependencies": {
-    "electron": "^28.2.3",
-    "electron-builder": "^24.6.0",
-    "electron-rebuild": "^3.2.9"
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.geminiwhisper.app",
@@ -41,8 +40,7 @@
     "files": [
       "**/*",
       "!node_modules/.cache",
-      "!src/**/*",
-      "dist/**/*"
+      "!src/**/*"
     ],
     "extraResources": [
       {
